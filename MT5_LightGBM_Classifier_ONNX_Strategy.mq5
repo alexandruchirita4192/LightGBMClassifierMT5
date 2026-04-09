@@ -1,49 +1,49 @@
 #property strict
 #property version   "3.00"
-#property description "EA MT5: LightGBM clasificator antrenat in Python, exportat ONNX, rulat in Strategy Tester"
-#property description "Cu trend filter, ATR volatility filter si kill switch optional"
+#property description "EA MT5: LightGBM classifier trained in Python, exported ONNX, run in Strategy Tester"
+#property description "With trend filter, ATR volatility filter and kill switch optional"
 
 #include <Trade/Trade.mqh>
 
 // IMPORTANT:
-// 1) Copiaza fisierul ml_strategy_classifier_lightgbm.onnx in acelasi folder cu acest .mq5.
-// 2) Recompileaza EA-ul dupa copiere.
+// 1) Copy the ml_strategy_classifier_lightgbm.onnx file to the same folder as this .mq5.
+// 2) Recompile the EA after copying.
 #resource "ml_strategy_classifier_lightgbm.onnx" as uchar ExtModel[]
 
-input double InpLots                  = 0.10;      // InpLots: Lot fix
-input double InpEntryProbThreshold    = 0.60;      // InpEntryProbThreshold: Prag minim pentru probabilitatea BUY/SELL
-input double InpMinProbGap            = 0.15;      // InpMinProbGap: Diferenta minima intre cea mai buna clasa si urmatoarea
-input bool   InpUseAtrStops           = true;      // InpUseAtrStops: Foloseste SL/TP pe baza ATR
-input double InpStopAtrMultiple       = 1.50;      // InpStopAtrMultiple: SL = ATR * multiplicator
-input double InpTakeAtrMultiple       = 2.00;      // InpTakeAtrMultiple: TP = ATR * multiplicator
-input int    InpMaxBarsInTrade        = 8;         // InpMaxBarsInTrade: Recomandat sa fie egal cu horizon_bars din Python
-input bool   InpCloseOnOppositeSignal = true;      // InpCloseOnOppositeSignal: Inchide pe semnal opus
-input bool   InpAllowLong             = true;      // InpAllowLong: Permite BUY
-input bool   InpAllowShort            = true;      // InpAllowShort: Permite SELL
+input double InpLots                  = 0.10;      // InpLots: Fixed lot
+input double InpEntryProbThreshold    = 0.60;      // InpEntryProbThreshold: Minimum threshold for BUY/SELL probability
+input double InpMinProbGap            = 0.15;      // InpMinProbGap: Minimum difference between the best class and the next
+input bool   InpUseAtrStops           = true;      // InpUseAtrStops: Use SL/TP based on ATR
+input double InpStopAtrMultiple       = 1.50;      // InpStopAtrMultiple: SL = ATR * multiplier
+input double InpTakeAtrMultiple       = 2.00;      // InpTakeAtrMultiple: TP = ATR * multiplier
+input int    InpMaxBarsInTrade        = 8;         // InpMaxBarsInTrade: Recommended to be equal to horizon_bars from Python
+input bool   InpCloseOnOppositeSignal = true;      // InpCloseOnOppositeSignal: Close on opposite signal
+input bool   InpAllowLong             = true;      // InpAllowLong: Allow BUY
+input bool   InpAllowShort            = true;      // InpAllowShort: Allow SELL
 
-input bool   InpUseTrendFilter        = true;      // InpUseTrendFilter: Activeaza filtru de trend
-input ENUM_TIMEFRAMES InpTrendTF      = PERIOD_H1; // InpTrendTF: Timeframe trend
+input bool   InpUseTrendFilter        = true;      // InpUseTrendFilter: Activate trend filter
+input ENUM_TIMEFRAMES InpTrendTF      = PERIOD_H1; // InpTrendTF: Trend timeframe
 input int    InpTrendMAPeriod         = 100;       // InpTrendMAPeriod: EMA period
-input bool   InpTrendRequireSlope     = true;      // InpTrendRequireSlope: EMA trebuie sa aiba si panta in directia semnalului
-input bool   InpUseTrendDistanceFilter = false;    // InpUseTrendDistanceFilter: Cere distanta minima fata de EMA HTF
-input double InpTrendMinDistancePct    = 0.0010;   // InpTrendMinDistancePct: Distanta minima fata de EMA (0.001 = 0.1%)
+input bool   InpTrendRequireSlope     = true;      // InpTrendRequireSlope: EMA must also have slope in the signal direction
+input bool   InpUseTrendDistanceFilter = false;    // InpUseTrendDistanceFilter: Require minimum distance from HTF EMA
+input double InpTrendMinDistancePct    = 0.0010;   // InpTrendMinDistancePct: Minimum distance from EMA (0.001 = 0.1%)
 
-input bool   InpUseAtrVolFilter        = true;     // InpUseAtrVolFilter: Activeaza filtru ATR
-input int    InpAtrVolLookback         = 50;       // InpAtrVolLookback: Numar bare pentru distributia ATR
-input double InpAtrMinPercentile       = 0.25;     // InpAtrMinPercentile: Prag minim ATR din distributie (0..1)
-input double InpAtrMaxPercentile       = 0.85;     // InpAtrMaxPercentile: Prag maxim ATR din distributie (0..1)
+input bool   InpUseAtrVolFilter        = true;     // InpUseAtrVolFilter: Activate ATR filter
+input int    InpAtrVolLookback         = 50;       // InpAtrVolLookback: Number of bars for ATR distribution
+input double InpAtrMinPercentile       = 0.25;     // InpAtrMinPercentile: Minimum ATR threshold from distribution (0..1)
+input double InpAtrMaxPercentile       = 0.85;     // InpAtrMaxPercentile: Maximum ATR threshold from distribution (0..1)
 
-input bool   InpUseKillSwitch                 = false; // InpUseKillSwitch: Activeaza kill switch
-input int    InpKillSwitchLookbackTrades      = 8;     // InpKillSwitchLookbackTrades: Ultimele N trade-uri analizate
-input double InpKillSwitchMinWinRate          = 0.40;  // InpKillSwitchMinWinRate: Win rate minim acceptat
-input double InpKillSwitchMinProfitFactor     = 0.95;  // InpKillSwitchMinProfitFactor: Profit factor minim acceptat
-input int    InpKillSwitchConsecutiveLosses   = 4;     // InpKillSwitchConsecutiveLosses: Pierderi consecutive maxime
-input int    InpKillSwitchPauseBars           = 96;    // InpKillSwitchPauseBars: Pauza in bare dupa activare
-input bool   InpKillSwitchFlatOnActivate      = true;  // InpKillSwitchFlatOnActivate: Inchide pozitia curenta cand se activeaza
+input bool   InpUseKillSwitch                 = false; // InpUseKillSwitch: Activate kill switch
+input int    InpKillSwitchLookbackTrades      = 8;     // InpKillSwitchLookbackTrades: Last N trades analyzed
+input double InpKillSwitchMinWinRate          = 0.40;  // InpKillSwitchMinWinRate: Minimum accepted win rate
+input double InpKillSwitchMinProfitFactor     = 0.95;  // InpKillSwitchMinProfitFactor: Minimum accepted profit factor
+input int    InpKillSwitchConsecutiveLosses   = 4;     // InpKillSwitchConsecutiveLosses: Maximum consecutive losses
+input int    InpKillSwitchPauseBars           = 96;    // InpKillSwitchPauseBars: Pause in bars after activation
+input bool   InpKillSwitchFlatOnActivate      = true;  // InpKillSwitchFlatOnActivate: Close current position when activated
 
 input long   InpMagic                 = 26042026;  // InpMagic: Magic number
-input bool   InpLog                   = false;     // InpLog: Log principal
-input bool   InpDebugLog              = false;     // InpDebugLog: Log la fiecare bara noua
+input bool   InpLog                   = false;     // InpLog: Main log
+input bool   InpDebugLog              = false;     // InpDebugLog: Log on every new bar
 
 const int FEATURE_COUNT = 10;
 const int CLASS_COUNT   = 3; // ordinea claselor: SELL, FLAT, BUY
