@@ -625,8 +625,7 @@ void OpenTrade(SignalDirection signal, double atr14)
          tp = ask + tp_dist;
         }
       ok = trade.Buy(InpLots, _Symbol, ask, sl, tp, "LGBM class buy");
-      if(ok)
-         g_bars_in_trade = 0;
+      if(ok) { g_bars_in_trade=0; if(InpLog) Print("Buy succeeded."); }
       else if(InpLog)
          PrintFormat("BUY failed. retcode=%d lastError=%d ask=%.5f sl=%.5f tp=%.5f",
                      trade.ResultRetcode(), GetLastError(), ask, sl, tp);
@@ -639,8 +638,7 @@ void OpenTrade(SignalDirection signal, double atr14)
          tp = bid - tp_dist;
         }
       ok = trade.Sell(InpLots, _Symbol, bid, sl, tp, "LGBM class sell");
-      if(ok)
-         g_bars_in_trade = 0;
+      if(ok) { g_bars_in_trade=0; if(InpLog) Print("Sell succeeded."); }
       else if(InpLog)
          PrintFormat("SELL failed. retcode=%d lastError=%d bid=%.5f sl=%.5f tp=%.5f",
                      trade.ResultRetcode(), GetLastError(), bid, sl, tp);
