@@ -1,5 +1,7 @@
 # MT5 + LightGBM + ONNX
 
+MLP has been ranked first between individual classifiers on the data I have tested, followed by LightGBM and HistGradientBoosting. On other data, an weighted ensemble of MLP 0.25, LightGBM 0.25, 0.50 HistGradientBoosting was better than MLP, LightGBM or HistGradientBoosting individually.
+
 Contains:
 - `train_mt5_lightgbm_classifier.py` — Python script for training, chronological train/test split, labeling on 3 classes and ONNX export
 - `MT5_LightGBM_Classifier_ONNX_Strategy.mq5` — MQL5 EA for Strategy Tester and running in MT5
